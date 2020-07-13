@@ -2,85 +2,175 @@ import * as dat from './node_modules/dat.gui/build/dat.gui.module.js';
 import * as THREE from './node_modules/three/build/three.module.js';
 import { MapControls } from './node_modules/three/examples/jsm/controls/OrbitControls.js';
 
-let settings = new Settings();
-function Settings() {
-  this.fixedTubeRad = 0.5;
-  this.otherTubeRad = 0.6;
-  this.orthoDist = 1.1;
-  this.orthoAngle = 0.4 * math.pi; 
-  this.needsUpdate = false;
+let generators = {};
+let params = new Params();
+updateParams();
+
+function Params() {
+  this.margulis = 0.774426607009985;
+  this.xMargRad = 0.262655660105195;
+  this.yMargRad = 0.262655660105195;
+  this.orthoAngle = 1.810246162850034;
+  this.xAngle = 2.495370455560468;
+  this.yAngle = 2.495370455560469;
+  this.isRendering = false;
+}
+
+function updateParams() {
+  let p = params;
+
+  p.orthoDist = p.xMargRad + p.yMargRad;
+ 
+  p.coshmu = math.cosh( p.margulis );
+  p.sinhdx = math.sinh( p.xMargRad );
+  p.sinhdy = math.sinh( p.yMargRad );
+  p.cosf = math.cos( p.orthoAngle );
+  p.sintx2 = math.sin( p.xAngle / 2 ); 
+  p.sinty2 = math.sin( p.yAngle / 2 ); 
+
+  p.sinhsdx = p.sinhdx * p.sinhdx;
+  p.coshsdx = 1 + p.sinhsdx;
+  p.sinhsdy = p.sinhdy * p.sinhdy;
+  p.coshsdy = 1 + p.sinhsdy;
+  p.costx = 1 - (p.sintx2 * p.sintx2) * 2;
+  p.costy = 1 - (p.sinty2 * p.sinty2) * 2;
+
+  p.coshlx = (p.coshmu + p.costx * p.sinhsdx) / p.coshsdx;
+  p.coshly = (p.coshmu + p.costy * p.sinhsdy) / p.coshsdy;
+  
+  p.xLength = math.acosh( p.coshlx );
+  p.yLength = math.acosh( p.coshly );
+
+  // Setting for generators
+  p.coshlx2 = math.sqrt( (p.coshlx + 1) / 2 ); 
+  p.sinhlx2 = math.sqrt( (p.coshlx - 1) / 2 ); 
+  p.coshly2 = math.sqrt( (p.coshly + 1) / 2 ); 
+  p.sinhly2 = math.sqrt( (p.coshly - 1) / 2 ); 
+
+  p.costx2 = math.sqrt( 1 - p.sintx2 * p.sintx2 ); 
+  p.costy2 = math.sqrt( 1 - p.sinty2 * p.sinty2 ); 
+
+  p.coshLx2 = math.complex( p.coshlx2 * p.costx2, p.sinhlx2 * p.sintx2 ); 
+  p.sinhLx2 = math.complex( p.sinhlx2 * p.costx2, p.coshlx2 * p.sintx2 ); 
+  p.coshLy2 = math.complex( p.coshly2 * p.costy2, p.sinhly2 * p.sinty2 ); 
+  p.sinhLy2 = math.complex( p.sinhly2 * p.costy2, p.coshly2 * p.sinty2 ); 
+
+  p.coshdx = math.sqrt(p.coshsdx);
+  p.coshdy = math.sqrt(p.coshsdy);
+
+  p.expdx = p.coshdx + p.sinhdx; 
+  p.expmdx = p.coshdx - p.sinhdx;
+  p.expdy = p.coshdy + p.sinhdy; 
+  p.expmdy = p.coshdy - p.sinhdy;
+
+  p.sinf = math.sqrt( 1 - p.cosf * p.cosf );
+
+  p.expif  = math.complex( p.cosf,  p.sinf );
+  p.expmif = math.complex( p.cosf, -p.sinf );
+
+  // These are usef for fixed points, so we make them complex
+  p.expdx = math.complex(p.expdx, 0);
+  p.expmdx = math.complex(p.expmdx, 0);
+  p.expdyf = math.multiply(p.expdy, p.expif);
+  p.expmdyf = math.multiply(p.expmdy, p.expmif);
+
+  p.xAxis = {'m': params.expmdx.neg(), 'p': params.expmdx };
+  p.yAxis = {'m': params.expdyf.neg(), 'p': params.expdyf };
+  // End settings for generators
+
+  updateGenerators();
+}
+
+function updateGenerators() {
+  let p = params;
+
+  generators.x = math.matrix(
+    [[ p.coshLx2, math.multiply(p.expmdx, p.sinhLx2) ],
+     [ math.multiply(p.expdx, p.sinhLx2), p.coshLx2]] );
+
+  generators.y = math.matrix(
+    [[ p.coshLy2, math.multiply(p.expdyf, p.sinhLy2)],
+     [ math.multiply(p.expmdyf, p.sinhLy2), p.coshLy2]] );
+
+  generators.X = SL2inverse( generators.x );
+  generators.Y = SL2inverse( generators.y );
+}
+
+function SL2inverse( SL2mat ) {
+  return math.matrix(
+    [[ SL2mat.get([1,1]), -SL2mat.get([0,1]) ],
+     [-SL2mat.get([1,0]),  SL2mat.get([0,0]) ]] ); 
 }
 
 // Scene vars
 let container, scene, camera, controls, renderer;
 
-// Tube drawing cars
+// Tube drawing vars
 let tubes = [];
 let lineMaterial;
 const MAX_POINTS = 120;
 const ANGLE_INC = 2 * math.pi / MAX_POINTS;
 let samplingValues = new Float64Array( MAX_POINTS ) ;
-let sinhFixed = math.sinh( settings.fixedTubeRad );
-let coshFixed = math.cosh( settings.fixedTubeRad );
 
-function animate() {
-  requestAnimationFrame( animate );
+function render() {
   controls.update();
-
-  if (settings.needsUpdate) {
-    tubes.forEach(updateTube);
-    settings.needsUpdate = false;
-  }  
-
   renderer.render( scene, camera );
+  params.isRendering = false;
+}
+
+function updateScene() {
+  if (!params.isRendering) {
+    params.isRendering = true;
+    updateParams();
+    tubes.forEach(updateTube);
+    requestAnimationFrame( render );
+  }
 }
 
 initScene();
 initTubes();
-// console.log(scene);
-animate();
+updateScene();
 
 function initScene() {
-    container = document.createElement( 'div' );
-    document.body.appendChild( container );
+  container = document.createElement( 'div' );
+  document.body.appendChild( container );
 
-    scene = new THREE.Scene();
-    scene.background = new THREE.Color( 0xffffff );
+  scene = new THREE.Scene();
+  scene.background = new THREE.Color( 0xffffff );
 
-    camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 500 );
-    camera.position.set( 0, 0, 5 );
-    camera.lookAt( 0, 0, 0 );
-    scene.add(camera);
+  camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 500 );
+  camera.position.set( 0, 0, 5 );
+  camera.lookAt( 0, 0, 0 );
+  scene.add(camera);
 
-    renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize( window.innerWidth, window.innerHeight );
-    renderer.setPixelRatio( window.devicePixelRatio );
-    container.appendChild( renderer.domElement );
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize( window.innerWidth, window.innerHeight );
+  renderer.setPixelRatio( window.devicePixelRatio );
+  container.appendChild( renderer.domElement );
 
-    controls = new MapControls( camera, renderer.domElement );
-    controls.screenSpacePanning = true;
- 
-    window.onload = function() {
-	    initGUI();
-    }
+  controls = new MapControls( camera, renderer.domElement );
+  // controls.enableDamping = true;
+  controls.screenSpacePanning = true;
+  controls.addEventListener('change', updateScene);
+
+  window.onload = function() {
+    initGUI();
+  }
 }
 
 function initGUI() {
     var gui = new dat.GUI();
-    gui.add(settings,'fixedTubeRad',0.0,4.0).onChange(function(x) {
-      sinhFixed = math.sinh( settings.fixedTubeRad );
-      coshFixed = math.cosh( settings.fixedTubeRad );
-      settings.needsUpdate = true;
-    }).name("Fixed Radius");
-    gui.add(settings,'otherTubeRad',0.0,4.0).onChange(function(x) {
-      settings.needsUpdate = true;
-    }).name("Other Radius");
-    gui.add(settings,'orthoDist',0.0,4.0).onChange(function(x) {
-      settings.needsUpdate = true; 
-    }).name("Orthodistance");
-    gui.add(settings,'orthoAngle',-1.57,1.57).onChange(function(x) {
-      settings.needsUpdate = true;
-    }).name("Orthoangle");
+    gui.add(params, 'margulis', 0.0, 0.8).onChange(updateScene).name("Margulis");
+    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateScene).name("x Marg Rad");
+    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateScene).name("y Marg Rad");
+    gui.add(params, 'orthoAngle', 0, math.pi).onChange(updateScene).name("Ortho Angle");
+    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateScene).name("x Angle");
+    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateScene).name("y Angle");
+    let derived = gui.addFolder('Derived Params');
+    let xLenGUI = derived.add(params, 'xLength').name("x Length").listen();
+    let yLenGUI = derived.add(params, 'yLength').name("y Length").listen();
+    xLenGUI.domElement.style.pointerEvents = "none"
+    yLenGUI.domElement.style.pointerEvents = "none"
 }    
 
 function initTubes() {
@@ -91,7 +181,50 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  addTubeToScene( math.complex(settings.orthoDist, settings.orthoAngle) );
+  addTubeToScene( "", 'yAxis', 'yMargRad' );
+  addTubeToScene( "x", 'yAxis', 'yMargRad' );
+}
+
+function getSL2( word ) {
+  let one  = math.complex(1, 0);
+  let zero = math.complex(0, 0);
+  let w = math.matrix([[one, zero], [zero, one]]);
+  for (let c of word) {
+    w = math.multiply(w, generators[c]);
+  }
+  return w;
+}
+
+function mobius( w, z ) {
+  let a = w.get([0,0]);
+  let b = w.get([0,1]);
+  let c = w.get([1,0]);
+  let d = w.get([1,1]);
+  // sigh for no overloading...
+  return math.divide( math.add(math.multiply(a, z), b), math.add(math.multiply(c, z), d) );
+}
+
+function getSinhOrthoX( a ) {
+  // Takes an axis and returns ortho to axis(x)
+  // Note: axis(x) = (-params.expmdx, paramx.expmdx)
+  // CrossRatio is used to get cosh^2(orth/2), then cosh(ortho) = 2 cosh^2(othro/2) - 1
+  let p = params;
+  let coshOrtho = math.divide( math.subtract(
+                    math.prod(p.expdx, a.m, a.p), params.expmdx),
+                    math.subtract(a.m, a.p));
+  return math.sqrt( math.subtract( math.square(coshOrtho), 1) ); // todo: check the branch cut
+}
+
+function getOrthoDisplacementX( a ) {
+  // Takes an axis and returns ortho to axis(x)
+  let p = params;
+  let eam = math.multiply( a.m, p.expdx );
+  let eap = math.multiply( a.p, p.expdx );
+  let expDisp = math.sqrt( math.divide (
+     math.multiply( math.add(eam, 1),      math.add( eap, 1) ),
+     math.multiply( math.subtract(eam, 1), math.subtract(eap, 1) ))
+  );
+  return math.log( expDisp );
 }
 
 function tubeGeometry() {
@@ -101,31 +234,35 @@ function tubeGeometry() {
   return geometry;
 }
 
-function updateTube(tube) {
-  // console.log("Updateing a tube");
-  // console.log(tube);
-  let t, z, s, sinhOrtho, positions;
-  tube.radius = settings.otherTubeRad; // fix this one tubes are assocaited to words
-  tube.ortho = math.complex(settings.orthoDist, settings.orthoAngle);
-  sinhOrtho = math.sinh( tube.ortho );
+function updateTube( tube ) {
+  let axis, radius, disp, w, wAxis, sinhOrtho, positions, z, s;
+
+  axis = params[tube.axis_key];
+  radius = params[tube.rad_key];
+  w = getSL2( tube.word ); // generators expected to be updated
+  wAxis = {'m': mobius( w, axis.m ), 'p': mobius( w, axis.p )}
+  sinhOrtho = getSinhOrthoX( wAxis );
+  disp = getOrthoDisplacementX( wAxis );
+
   positions = tube.line.geometry.attributes.position.array;
   for (let i = 0; i < MAX_POINTS; i++) {
-    t = samplingValues[i];
-    z = math.complex( tube.radius, t );
-    s = math.asinh( math.cosh(z).div(sinhOrtho) );      
-    positions[3 * i] = s.im * sinhFixed;
-    positions[3 * i + 1] = s.re * coshFixed;
+    // from Tubes in Hyperbolic 3-Manifolds by Przeworski
+    // len_coord/cosh(view_tube_rad) + i girth_coord/sinh(view_tube_rad) =
+    //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
+    z = math.complex( radius, samplingValues[i] );
+    s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
+    positions[3 * i] = s.im * params.sinhdx + disp.im;
+    positions[3 * i + 1] = s.re * params.coshdx + disp.re;
     positions[3 * i + 2] = 0;
-  } 
+  }
   tube.line.geometry.attributes.position.needsUpdate = true;   
-  // tube.line.geometry.computeBoundingSphere();
 }
 
 
-function addTubeToScene(ortho) {
+function addTubeToScene( word, axis_key, rad_key ) {
   let geometry = tubeGeometry();
   let line = new THREE.LineLoop( geometry, lineMaterial );
-  let tube = { 'ortho': ortho, 'line': line, 'radius': settings.otherTubeRad };
+  let tube = { 'axis_key': axis_key, 'word': word, 'line': line, 'rad_key': rad_key };
   tubes.push( tube );
   updateTube( tube );
   scene.add( line );
