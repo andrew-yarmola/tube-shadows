@@ -98,8 +98,8 @@ function updateGenerators() {
 
 function SL2inverse( SL2mat ) {
   return math.matrix(
-    [[ SL2mat.get([1,1]), -SL2mat.get([0,1]) ],
-     [-SL2mat.get([1,0]),  SL2mat.get([0,0]) ]] ); 
+    [[ SL2mat.get([1,1])      ,  SL2mat.get([0,1]).neg() ],
+     [ SL2mat.get([1,0]).neg(),  SL2mat.get([0,0])       ]] ); 
 }
 
 // Scene vars
@@ -181,8 +181,14 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  addTubeToScene( "", 'yAxis', 'yMargRad' );
-  addTubeToScene( "x", 'yAxis', 'yMargRad' );
+  let yWords = ["", "x", "xx", "X", "XX", "yx", "Yx", "yX", "YX"];
+  for (let word of yWords) {
+    addTubeToScene( word, 'yAxis', 'yMargRad' );
+  }
+  let xWords = ["y", "Y", "yy", "YY", "xy", "Xy", "xY", "XY"];
+  for (let word of xWords) {
+    addTubeToScene( word, 'xAxis', 'xMargRad' );
+  }
 }
 
 function getSL2( word ) {
