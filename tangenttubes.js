@@ -7,78 +7,43 @@ let params = new Params();
 updateParams();
 
 function Params() {
-  this.margulis = 0.774426607009985;
-  this.xMargRad = 0.262655660105195;
-  this.yMargRad = 0.262655660105195;
-  this.orthoAngle = 1.810246162850034;
-  this.xAngle = -2.495370455560468;
-  this.yAngle = -2.495370455560469;
+  this.fLength = 0.8314429;
+  this.fAngle = -1.9455307;
+  this.orthoDist = 0.8314429;
+  this.orthoAngle = -1.9455307;
+  this.orthoShift = 0.0;
+  this.orthoSpin = 0.0;
   this.isRendering = false;
+  this.orthoShift = 0;
   this.needsUpdate = true;
 }
 
 function updateParams() {
   let p = params;
 
-  p.orthoDist = p.xMargRad + p.yMargRad;
+  p.tubeRad = p.orthoDist / 2;
+  p.sinhRad = math.sinh( p.tubeRad ) 
+  p.coshRad = math.cosh( p.tubeRad ) 
  
-  p.coshmu = math.cosh( p.margulis );
-  p.sinhdx = math.sinh( p.xMargRad );
-  p.sinhdy = math.sinh( p.yMargRad );
-  p.cosf = math.cos( p.orthoAngle );
-  p.sintx2 = math.sin( p.xAngle / 2 ); 
-  p.sinty2 = math.sin( p.yAngle / 2 ); 
+  p.L = math.complex( p.fLength, p.fAngle );
+  p.L2 = math.divide( p.L, 2 );
+  p.D = math.complex( p.orthoDist, p.orthoAngle );
+  p.D2 = math.divide( p.D, 2 );
+  p.R = math.complex( p.orthoShift, p.orthoSpin );
+  p.R2 = math.divide( p.R, 2 );
 
-  p.sinhsdx = p.sinhdx * p.sinhdx;
-  p.coshsdx = 1 + p.sinhsdx;
-  p.sinhsdy = p.sinhdy * p.sinhdy;
-  p.coshsdy = 1 + p.sinhsdy;
+  p.coshD2 = math.cosh( p.D2 );
+  p.sinhD2 = math.sinh( p.D2 );
 
-  p.costx = 1 - (p.sintx2 * p.sintx2) * 2;
-  p.costy = 1 - (p.sinty2 * p.sinty2) * 2;
-
-  p.coshlx = (p.coshmu + p.costx * p.sinhsdx) / p.coshsdx;
-  p.coshly = (p.coshmu + p.costy * p.sinhsdy) / p.coshsdy;
+  p.expL2 = math.exp( p.L2 ); 
+  p.expmL2 = math.exp( p.L2.neg() );
   
-  p.xLength = math.acosh( p.coshlx );
-  p.yLength = math.acosh( p.coshly );
+  p.expR = math.exp( p.R );
+  p.expR2 = math.exp( p.R2 ); 
+  p.expmR2 = math.exp( p.R2.neg() ); 
 
-  // Setting for generators
-  p.coshlx2 = math.sqrt( (p.coshlx + 1) / 2 ); 
-  p.sinhlx2 = math.sqrt( (p.coshlx - 1) / 2 ); 
-  p.coshly2 = math.sqrt( (p.coshly + 1) / 2 ); 
-  p.sinhly2 = math.sqrt( (p.coshly - 1) / 2 ); 
-
-  p.costx2 = math.sqrt( 1 - p.sintx2 * p.sintx2 ); 
-  p.costy2 = math.sqrt( 1 - p.sinty2 * p.sinty2 ); 
-
-  p.coshLx2 = math.complex( p.coshlx2 * p.costx2, p.sinhlx2 * p.sintx2 ); 
-  p.sinhLx2 = math.complex( p.sinhlx2 * p.costx2, p.coshlx2 * p.sintx2 ); 
-  p.coshLy2 = math.complex( p.coshly2 * p.costy2, p.sinhly2 * p.sinty2 ); 
-  p.sinhLy2 = math.complex( p.sinhly2 * p.costy2, p.coshly2 * p.sinty2 ); 
-
-  p.coshdx = math.sqrt(p.coshsdx);
-  p.coshdy = math.sqrt(p.coshsdy);
-
-  p.expdx = p.coshdx + p.sinhdx; 
-  p.expmdx = p.coshdx - p.sinhdx;
-  p.expdy = p.coshdy + p.sinhdy; 
-  p.expmdy = p.coshdy - p.sinhdy;
-
-  p.sinf = math.sqrt( 1 - p.cosf * p.cosf );
-
-  p.expif  = math.complex( p.cosf,  p.sinf );
-  p.expmif = math.complex( p.cosf, -p.sinf );
-
-  // These are usef for fixed points, so we make them complex
-  p.expdx = math.complex(p.expdx, 0);
-  p.expmdx = math.complex(p.expmdx, 0);
-  p.expdyf = math.multiply(p.expdy, p.expif);
-  p.expmdyf = math.multiply(p.expmdy, p.expmif);
-
-  p.xAxis = {'m': params.expmdx.neg(), 'p': params.expmdx };
-  p.yAxis = {'m': params.expdyf.neg(), 'p': params.expdyf };
-  // End settings for generators
+  p.wfWAxis = {'m': math.multiply( p.expR, math.tanh( p.D2 ) ),
+               'p': math.multiply( p.expR, math.coth( p.D2 ) )};
 
   updateGenerators();
 }
@@ -86,16 +51,16 @@ function updateParams() {
 function updateGenerators() {
   let p = params;
 
-  generators.x = math.matrix(
-    [[ p.coshLx2, math.multiply(p.expmdx, p.sinhLx2) ],
-     [ math.multiply(p.expdx, p.sinhLx2), p.coshLx2]] );
+  generators.f = math.matrix(
+    [[ p.expL2, math.complex( 0, 0 )  ],
+     [ math.complex( 0, 0 ), p.expmL2 ]] );
 
-  generators.y = math.matrix(
-    [[ p.coshLy2, math.multiply(p.expdyf, p.sinhLy2)],
-     [ math.multiply(p.expmdyf, p.sinhLy2), p.coshLy2]] );
+  generators.w = math.matrix(
+    [[ math.multiply( p.expR2,  p.coshD2 ),  math.multiply( p.expR2,  p.sinhD2 )],
+     [ math.multiply( p.expmR2, p.sinhD2 ), math.multiply( p.expmR2, p.coshD2 )]] );
 
-  generators.X = SL2inverse( generators.x );
-  generators.Y = SL2inverse( generators.y );
+  generators.F = SL2inverse( generators.f );
+  generators.W = SL2inverse( generators.w );
 }
 
 function SL2inverse( SL2mat ) {
@@ -170,17 +135,15 @@ function initScene() {
 
 function initGUI() {
     var gui = new dat.GUI();
-    gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("Margulis");
-    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x Marg Rad");
-    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("y Marg Rad");
-    gui.add(params, 'orthoAngle', 0.0, math.pi).onChange(updateParamsAndScene).name("Ortho Angle");
-    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("x Angle");
-    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("y Angle");
+    gui.add(params, 'fLength', 0.0, 1.0).onChange(updateParamsAndScene).name("re length(g)");
+    gui.add(params, 'fAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("im lengt(g)");
+    gui.add(params, 'orthoDist', 0.0, 5.0).onChange(updateParamsAndScene).name("twice tube rad");
+    gui.add(params, 'orthoAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("ortho angle");
+    gui.add(params, 'orthoShift', 0.0, 1.0).onChange(updateParamsAndScene).name("ortho shift");
+    gui.add(params, 'orthoSpin', -math.pi, math.pi).onChange(updateParamsAndScene).name("ortho spin");
     let derived = gui.addFolder('Derived Params');
-    let xLenGUI = derived.add(params, 'xLength').name("x Length").listen();
-    let yLenGUI = derived.add(params, 'yLength').name("y Length").listen();
-    xLenGUI.domElement.style.pointerEvents = "none"
-    yLenGUI.domElement.style.pointerEvents = "none"
+    let tubeRadGUI = derived.add(params, 'tubeRad').name("Tube Radius").listen();
+    tubeRadGUI.domElement.style.pointerEvents = "none"
 }    
 
 function initTubes() {
@@ -191,14 +154,27 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  let yWords = ["", "x", "xx", "X", "XX", "yx", "Yx", "yX", "YX"];
-  for (let word of yWords) {
-    addTubeToScene( word, 'yAxis', 'yMargRad' );
+  let genInv = { 'f': 'F', 'F': 'f', 'w': 'W', 'W': 'w' };
+
+  let words = { 1: ["f", "F", "w"] };
+  let allWords = words[1];
+  for (let depth = 1; depth < 3; depth++) {
+    let newWords = [];
+    for (let word of words[depth]) {
+      for (let gen of "fFwW") {
+        if (genInv[gen] != word.charAt(0)) {
+          newWords.push( gen + word );
+        } 
+      }
+    }
+    words[depth+1] = newWords;
+    allWords = allWords.concat(newWords);
+  } 
+  console.log(allWords); 
+  for (let word of allWords) {
+    addTubeToScene( word, 'wfWAxis', 'tubeRad' );
   }
-  let xWords = ["y", "Y", "yy", "YY", "xy", "Xy", "xY", "XY", "xyy"];
-  for (let word of xWords) {
-    addTubeToScene( word, 'xAxis', 'xMargRad' );
-  }
+
 }
 
 function getSL2( word ) {
@@ -220,14 +196,12 @@ function mobius( w, z ) {
   return math.divide( math.add(math.multiply(a, z), b), math.add(math.multiply(c, z), d) );
 }
 
-function getSinhOrthoX( a ) {
-  // Takes an axis and returns ortho to axis(x)
-  // Note: axis(x) = (-params.expmdx, paramx.expmdx)
+function getSinhOrthoF( a ) {
+  // Takes an axis and returns ortho to axis(f)
+  // Note: axis(xf = (0, inf)
   // CrossRatio is used to get cosh^2(orth/2), then cosh(ortho) = 2 cosh^2(othro/2) - 1
   let p = params;
-  let coshOrtho = math.divide( math.subtract(
-                    math.prod(p.expdx, a.m, a.p), params.expmdx),
-                    math.subtract(a.m, a.p));
+  let coshOrtho = math.divide( math.add( a.p, a.m), math.subtract( a.p, a.m) )
   let sinhOrtho =  math.sqrt( math.subtract( math.square(coshOrtho), 1) );
   if (math.abs( math.add( coshOrtho, sinhOrtho ) ) < 1 ) {
     sinhOrtho = sinhOrtho.neg();
@@ -235,16 +209,11 @@ function getSinhOrthoX( a ) {
   return sinhOrtho;
 }
 
-function getOrthoDisplacementX( a ) {
+function getOrthoDisplacementF( a ) {
   // Takes an axis and returns ortho to axis(x)
-  let p = params;
-  let zm = math.multiply( a.m, p.expdx );
-  let zp = math.multiply( a.p, p.expdx );
-  let wm = math.divide( math.add( zm, 1 ), math.subtract( zm, 1 ) );
-  let wp = math.divide( math.add( zp, 1 ), math.subtract( zp, 1 ) );
-  let r = math.sqrt( math.multiply( wm, wp ) );
+  let r = math.sqrt( math.multiply( a.m, a.p ) );
   // we need to choose the correct imaginary part for r.
-  let sgn = ( wm.re * wp.im - wm.im * wp.re ) / ( r.re * (wp.im - wm.im) + r.im * (wm.re - wp.re) ); 
+  let sgn = ( a.m.re * a.p.im - a.m.im * a.p.re ) / ( r.re * (a.p.im - a.m.im) + r.im * (a.m.re - a.p.re) ); 
   if (sgn < 0) {
      r = r.neg();
   }
@@ -265,8 +234,8 @@ function updateTube( tube ) {
   radius = params[tube.rad_key];
   w = getSL2( tube.word ); // generators expected to be updated
   wAxis = {'m': mobius( w, axis.m ), 'p': mobius( w, axis.p )}
-  sinhOrtho = getSinhOrthoX( wAxis );
-  disp = getOrthoDisplacementX( wAxis );
+  sinhOrtho = getSinhOrthoF( wAxis );
+  disp = getOrthoDisplacementF( wAxis );
 
   positions = tube.line.geometry.attributes.position.array;
   for (let i = 0; i < MAX_POINTS; i++) {
@@ -275,8 +244,8 @@ function updateTube( tube ) {
     //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
     z = math.complex( radius, samplingValues[i] );
     s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
-    positions[3 * i] = (s.im + disp.im) * params.sinhdx;
-    positions[3 * i + 1] = (s.re + disp.re) * params.coshdx;
+    positions[3 * i] = (s.im + disp.im) * params.sinhRad;
+    positions[3 * i + 1] = (s.re + disp.re) * params.coshRad;
     positions[3 * i + 2] = 0;
   }
   tube.line.geometry.attributes.position.needsUpdate = true;   
