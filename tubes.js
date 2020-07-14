@@ -11,9 +11,10 @@ function Params() {
   this.xMargRad = 0.262655660105195;
   this.yMargRad = 0.262655660105195;
   this.orthoAngle = 1.810246162850034;
-  this.xAngle = 2.495370455560468;
-  this.yAngle = 2.495370455560469;
+  this.xAngle = -2.495370455560468;
+  this.yAngle = -2.495370455560469;
   this.isRendering = false;
+  this.needsUpdate = true;
 }
 
 function updateParams() {
@@ -32,6 +33,7 @@ function updateParams() {
   p.coshsdx = 1 + p.sinhsdx;
   p.sinhsdy = p.sinhdy * p.sinhdy;
   p.coshsdy = 1 + p.sinhsdy;
+
   p.costx = 1 - (p.sintx2 * p.sintx2) * 2;
   p.costy = 1 - (p.sinty2 * p.sinty2) * 2;
 
@@ -109,7 +111,7 @@ let container, scene, camera, controls, renderer;
 let tubes = [];
 let lineMaterial;
 const MAX_POINTS = 120;
-const ANGLE_INC = 2 * math.pi / MAX_POINTS;
+const ANGLE_INC = math.tau / MAX_POINTS;
 let samplingValues = new Float64Array( MAX_POINTS ) ;
 
 function render() {
@@ -121,10 +123,18 @@ function render() {
 function updateScene() {
   if (!params.isRendering) {
     params.isRendering = true;
-    updateParams();
-    tubes.forEach(updateTube);
+    if (params.needsUpdate) {
+      updateParams();
+      tubes.forEach(updateTube);
+      params.needsUpdate = false;
+    }
     requestAnimationFrame( render );
   }
+}
+
+function updateParamsAndScene() {
+  params.needsUpdate = true;
+  updateScene();
 }
 
 initScene();
@@ -160,12 +170,12 @@ function initScene() {
 
 function initGUI() {
     var gui = new dat.GUI();
-    gui.add(params, 'margulis', 0.0, 0.8).onChange(updateScene).name("Margulis");
-    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateScene).name("x Marg Rad");
-    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateScene).name("y Marg Rad");
-    gui.add(params, 'orthoAngle', 0, math.pi).onChange(updateScene).name("Ortho Angle");
-    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateScene).name("x Angle");
-    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateScene).name("y Angle");
+    gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("Margulis");
+    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x Marg Rad");
+    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("y Marg Rad");
+    gui.add(params, 'orthoAngle', 0.0, math.pi).onChange(updateParamsAndScene).name("Ortho Angle");
+    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("x Angle");
+    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("y Angle");
     let derived = gui.addFolder('Derived Params');
     let xLenGUI = derived.add(params, 'xLength').name("x Length").listen();
     let yLenGUI = derived.add(params, 'yLength').name("y Length").listen();
@@ -185,7 +195,7 @@ function initTubes() {
   for (let word of yWords) {
     addTubeToScene( word, 'yAxis', 'yMargRad' );
   }
-  let xWords = ["y", "Y", "yy", "YY", "xy", "Xy", "xY", "XY"];
+  let xWords = ["y", "Y", "yy", "YY", "xy", "Xy", "xY", "XY", "xyy"];
   for (let word of xWords) {
     addTubeToScene( word, 'xAxis', 'xMargRad' );
   }
@@ -224,13 +234,17 @@ function getSinhOrthoX( a ) {
 function getOrthoDisplacementX( a ) {
   // Takes an axis and returns ortho to axis(x)
   let p = params;
-  let eam = math.multiply( a.m, p.expdx );
-  let eap = math.multiply( a.p, p.expdx );
-  let expDisp = math.sqrt( math.divide (
-     math.multiply( math.add(eam, 1),      math.add( eap, 1) ),
-     math.multiply( math.subtract(eam, 1), math.subtract(eap, 1) ))
-  );
-  return math.log( expDisp );
+  let zm = math.multiply( a.m, p.expdx );
+  let zp = math.multiply( a.p, p.expdx );
+  let wm = math.divide( math.add( zm, 1 ), math.subtract( zm, 1 ) );
+  let wp = math.divide( math.add( zp, 1 ), math.subtract( zp, 1 ) );
+  let r = math.sqrt( math.multiply( wm, wp ) );
+  // we need to choose the correct imaginary part for r.
+  let sgn = ( wm.re * wp.im - wm.im * wp.re ) / ( r.re * (wp.im - wm.im) + r.im * (wm.re - wp.re) ); 
+  if (sgn < 0) {
+     r = r.neg();
+  }
+  return math.log(r); 
 }
 
 function tubeGeometry() {
@@ -257,8 +271,8 @@ function updateTube( tube ) {
     //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
     z = math.complex( radius, samplingValues[i] );
     s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
-    positions[3 * i] = s.im * params.sinhdx + disp.im;
-    positions[3 * i + 1] = s.re * params.coshdx + disp.re;
+    positions[3 * i] = (s.im + disp.im) * params.sinhdx;
+    positions[3 * i + 1] = (s.re + disp.re) * params.coshdx;
     positions[3 * i + 2] = 0;
   }
   tube.line.geometry.attributes.position.needsUpdate = true;   
