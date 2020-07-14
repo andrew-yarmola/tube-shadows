@@ -16,6 +16,8 @@ function Params() {
   this.isRendering = false;
   this.orthoShift = 0;
   this.needsUpdate = true;
+  this.words = [];
+  this.inputWord = "";
 }
 
 function updateParams() {
@@ -70,7 +72,7 @@ function SL2inverse( SL2mat ) {
 }
 
 // Scene vars
-let container, scene, camera, controls, renderer;
+let container, scene, camera, controls, renderer, wordListGUI;
 
 // Tube drawing vars
 let tubes = [];
@@ -103,8 +105,10 @@ function updateParamsAndScene() {
 }
 
 initScene();
-initTubes();
-updateScene();
+window.addEventListener('load', function() {
+  initTubes();
+  updateScene();
+});
 
 function initScene() {
   container = document.createElement( 'div' );
@@ -134,7 +138,7 @@ function initScene() {
 }
 
 function initGUI() {
-    var gui = new dat.GUI();
+    let gui = new dat.GUI();
     gui.add(params, 'fLength', 0.0, 1.0).onChange(updateParamsAndScene).name("re length(g)");
     gui.add(params, 'fAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("im lengt(g)");
     gui.add(params, 'orthoDist', 0.0, 5.0).onChange(updateParamsAndScene).name("twice tube rad");
@@ -144,21 +148,16 @@ function initGUI() {
     let derived = gui.addFolder('Derived Params');
     let tubeRadGUI = derived.add(params, 'tubeRad').name("Tube Radius").listen();
     tubeRadGUI.domElement.style.pointerEvents = "none"
+    gui.add(params, 'inputWord').onFinishChange(addTubeGUI).name("Add Word").listen();
+    wordListGUI = gui.addFolder('Current Words');
 }    
 
-function initTubes() {
-
-  lineMaterial = new THREE.LineBasicMaterial( { color : 0x000000, linewidth: 2 } );
-
-  for (let i = 1; i < MAX_POINTS; i++) {
-    samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
-  }
-
+function replaceTubes( maxDepth ) {
   let genInv = { 'f': 'F', 'F': 'f', 'w': 'W', 'W': 'w' };
 
   let words = { 1: ["f", "F", "w"] };
-  let allWords = words[1];
-  for (let depth = 1; depth < 3; depth++) {
+  params.words = [""].concat(words[1]);
+  for (let depth = 1; depth < maxDepth; depth++) {
     let newWords = [];
     for (let word of words[depth]) {
       for (let gen of "fFwW") {
@@ -168,13 +167,30 @@ function initTubes() {
       }
     }
     words[depth+1] = newWords;
-    allWords = allWords.concat(newWords);
-  } 
-  console.log(allWords); 
-  for (let word of allWords) {
-    addTubeToScene( word, 'wfWAxis', 'tubeRad' );
+    params.words = params.words.concat(newWords);
+  }
+}
+
+function initTubes() {
+  lineMaterial = new THREE.LineBasicMaterial( { color : 0x000000, linewidth: 2 } );
+
+  for (let i = 1; i < MAX_POINTS; i++) {
+    samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
+  replaceTubes( 1 );
+ 
+  for (let word of params.words) {
+    addTubeToScene( word, 'wfWAxis', 'tubeRad' );
+  }
+}
+
+function addTubeGUI() {
+  if (!params.words.includes(params.inputWord)) {
+    addTubeToScene( params.inputWord, 'wfWAxis', 'tubeRad' );
+    params.inputWord = "";
+    updateScene();
+  }
 }
 
 function getSL2( word ) {
@@ -259,4 +275,6 @@ function addTubeToScene( word, axis_key, rad_key ) {
   tubes.push( tube );
   updateTube( tube );
   scene.add( line );
+  let wordGUI = wordListGUI.add(tube, 'word');
+  wordGUI.domElement.style.pointerEvents = "none"
 }
