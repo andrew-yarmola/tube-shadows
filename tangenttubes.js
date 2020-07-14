@@ -11,10 +11,9 @@ function Params() {
   this.fAngle = -1.9455307;
   this.orthoDist = 0.8314429;
   this.orthoAngle = -1.9455307;
-  this.orthoShift = 0.0;
-  this.orthoSpin = 0.0;
+  this.orthoShift = 0.0001;
+  this.orthoSpin = 0.0001;
   this.isRendering = false;
-  this.orthoShift = 0;
   this.needsUpdate = true;
   this.words = [];
   this.inputWord = "";
