@@ -190,8 +190,8 @@ function initGUI() {
     gui.add(params, 'xInputWord').onFinishChange(addTubeGUIX).name("Add x word").listen();
     gui.add(params, 'yInputWord').onFinishChange(addTubeGUIY).name("Add y word").listen();
     let wordsGUI = gui.addFolder('Current Words');
-    xWordFolder = gui.addFolder('Words for axis(x)');
-    yWordFolder = gui.addFolder('Words for axis(y)');
+    xWordFolder = wordsGUI.addFolder('Words for axis(x)');
+    yWordFolder = wordsGUI.addFolder('Words for axis(y)');
 }    
 
 let genInv = { 'x': 'X', 'X': 'x', 'y': 'Y', 'Y': 'y' };
