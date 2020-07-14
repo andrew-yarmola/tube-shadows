@@ -44,7 +44,7 @@ function updateParams() {
   p.expR2 = math.exp( p.R2 ); 
   p.expmR2 = math.exp( p.R2.neg() ); 
 
-  p.wfWAxis = {'m': math.multiply( p.expR, math.tanh( p.D2 ) ),
+  p.WfwAxis = {'m': math.multiply( p.expR, math.tanh( p.D2 ) ),
                'p': math.multiply( p.expR, math.coth( p.D2 ) )};
 
   updateGenerators();
@@ -57,12 +57,12 @@ function updateGenerators() {
     [[ p.expL2, math.complex( 0, 0 )  ],
      [ math.complex( 0, 0 ), p.expmL2 ]] );
 
-  generators.w = math.matrix(
+  generators.W = math.matrix(
     [[ math.multiply( p.expR2,  p.coshD2 ),  math.multiply( p.expR2,  p.sinhD2 )],
      [ math.multiply( p.expmR2, p.sinhD2 ), math.multiply( p.expmR2, p.coshD2 )]] );
 
   generators.F = SL2inverse( generators.f );
-  generators.W = SL2inverse( generators.w );
+  generators.w = SL2inverse( generators.W );
 }
 
 function SL2inverse( SL2mat ) {
@@ -149,13 +149,13 @@ function initGUI() {
     let tubeRadGUI = derived.add(params, 'tubeRad').name("Tube Radius").listen();
     tubeRadGUI.domElement.style.pointerEvents = "none"
     gui.add(params, 'inputWord').onFinishChange(addTubeGUI).name("Add Word").listen();
-    wordListGUI = gui.addFolder('Current Words');
+    wordListGUI = gui.addFolder('Current Words applied to T tube');
 }    
 
-function replaceTubes( maxDepth ) {
-  let genInv = { 'f': 'F', 'F': 'f', 'w': 'W', 'W': 'w' };
+let genInv = { 'f': 'F', 'F': 'f', 'w': 'W', 'W': 'w' };
 
-  let words = { 1: ["f", "F", "w"] };
+function replaceTubes( maxDepth ) {
+  let words = { 1: ["f", "F", "W", "ww"] };
   params.words = [""].concat(words[1]);
   for (let depth = 1; depth < maxDepth; depth++) {
     let newWords = [];
@@ -181,12 +181,13 @@ function initTubes() {
   replaceTubes( 1 );
  
   for (let word of params.words) {
-    addTubeToScene( word, 'wfWAxis', 'tubeRad' );
+    addTubeToScene( word, 'WfwAxis', 'tubeRad' );
   }
 }
 
 function addTubeGUI() {
-  if (!params.words.includes(params.inputWord)) {
+  if (params.inputWord.matches("[fFwW]+") &&
+     !params.words.includes(params.inputWord)) {
     addTubeToScene( params.inputWord, 'wfWAxis', 'tubeRad' );
     params.inputWord = "";
     updateScene();
@@ -275,6 +276,6 @@ function addTubeToScene( word, axis_key, rad_key ) {
   tubes.push( tube );
   updateTube( tube );
   scene.add( line );
-  let wordGUI = wordListGUI.add(tube, 'word');
+  let wordGUI = wordListGUI.add(tube, 'word').name("");
   wordGUI.domElement.style.pointerEvents = "none"
 }

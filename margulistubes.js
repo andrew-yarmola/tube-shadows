@@ -13,6 +13,10 @@ function Params() {
   this.orthoAngle = 1.810246162850034;
   this.xAngle = -2.495370455560468;
   this.yAngle = -2.495370455560469;
+  this.xWords = [];
+  this.xInputWord = "";
+  this.yWords = [];
+  this.yInputWord = "";
   this.isRendering = false;
   this.needsUpdate = true;
 }
@@ -105,7 +109,7 @@ function SL2inverse( SL2mat ) {
 }
 
 // Scene vars
-let container, scene, camera, controls, renderer;
+let container, scene, camera, controls, renderer, xWordFolder, yWordFolder;
 
 // Tube drawing vars
 let tubes = [];
@@ -138,8 +142,10 @@ function updateParamsAndScene() {
 }
 
 initScene();
-initTubes();
-updateScene();
+window.addEventListener('load', function() {
+  initTubes();
+  updateScene();
+});
 
 function initScene() {
   container = document.createElement( 'div' );
@@ -170,34 +176,89 @@ function initScene() {
 
 function initGUI() {
     var gui = new dat.GUI();
-    gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("Margulis");
-    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x Marg Rad");
-    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("y Marg Rad");
-    gui.add(params, 'orthoAngle', 0.0, math.pi).onChange(updateParamsAndScene).name("Ortho Angle");
-    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("x Angle");
-    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("y Angle");
+    gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("margulis");
+    gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x marg rad");
+    gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("y marg rad");
+    gui.add(params, 'orthoAngle', 0.0, math.pi).onChange(updateParamsAndScene).name("ortho angle");
+    gui.add(params, 'xAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("x angle");
+    gui.add(params, 'yAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("y angle");
     let derived = gui.addFolder('Derived Params');
-    let xLenGUI = derived.add(params, 'xLength').name("x Length").listen();
-    let yLenGUI = derived.add(params, 'yLength').name("y Length").listen();
+    let xLenGUI = derived.add(params, 'xLength').name("x length").listen();
+    let yLenGUI = derived.add(params, 'yLength').name("y length").listen();
     xLenGUI.domElement.style.pointerEvents = "none"
     yLenGUI.domElement.style.pointerEvents = "none"
+    gui.add(params, 'xInputWord').onFinishChange(addTubeGUIX).name("Add x word").listen();
+    gui.add(params, 'yInputWord').onFinishChange(addTubeGUIY).name("Add y word").listen();
+    let wordsGUI = gui.addFolder('Current Words');
+    xWordFolder = gui.addFolder('Words for axis(x)');
+    yWordFolder = gui.addFolder('Words for axis(y)');
 }    
 
-function initTubes() {
+let genInv = { 'x': 'X', 'X': 'x', 'y': 'Y', 'Y': 'y' };
 
+function replaceTubes( maxDepth ) {
+  let words = { 1: ["x","X","y","Y"] };
+  let allWords = words[1];
+  for (let depth = 1; depth < maxDepth; depth++) {
+    let newWords = [];
+    for (let word of words[depth]) {
+      for (let gen of "xXyY") {
+        if (genInv[gen] != word.charAt(0)) {
+          newWords.push( gen + word );
+        } 
+      }
+    }
+    words[depth+1] = newWords;
+    allWords = allWords.concat(newWords);
+  }
+
+  params.xWords = [];
+  params.yWords = [""];
+  for (let word of allWords) {
+    params.xWords.push(word);
+    params.yWords.push(word);
+    let last = word.slice(-1);
+    if (last == "x" || last == "X") {
+      params.xWords.pop();
+    }
+    if (last == "y" || last == "Y") {
+      params.yWords.pop();
+    }
+  }
+}
+
+function initTubes() {
   lineMaterial = new THREE.LineBasicMaterial( { color : 0x000000, linewidth: 2 } );
 
   for (let i = 1; i < MAX_POINTS; i++) {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  let yWords = ["", "x", "xx", "X", "XX", "yx", "Yx", "yX", "YX"];
-  for (let word of yWords) {
-    addTubeToScene( word, 'yAxis', 'yMargRad' );
+  replaceTubes( 1 );
+  
+  for (let word of params.yWords) {
+    addTubeToScene( word, 'yAxis', 'yMargRad', yWordFolder );
   }
-  let xWords = ["y", "Y", "yy", "YY", "xy", "Xy", "xY", "XY", "xyy"];
-  for (let word of xWords) {
-    addTubeToScene( word, 'xAxis', 'xMargRad' );
+  for (let word of params.xWords) {
+    addTubeToScene( word, 'xAxis', 'xMargRad', xWordFolder );
+  }
+}
+
+function addTubeGUIX() {
+  if (params.xInputWord.match("[xXyY]+[yY]+") &&
+     !params.xWords.includes(params.xInputWord)) {
+    addTubeToScene( params.xInputWord, 'xAxis', 'xMargRad', xWordFolder );
+    params.xInputWord = "";
+    updateScene();
+  }
+}
+
+function addTubeGUIY() {
+  if (params.yInputWord.match("[xXyY]+[xX]+") &&
+     !params.yWords.includes(params.yInputWord)) {
+    addTubeToScene( params.yInputWord, 'yAxis', 'yMargRad', yWordFolder );
+    params.yInputWord = "";
+    updateScene();
   }
 }
 
@@ -283,11 +344,13 @@ function updateTube( tube ) {
 }
 
 
-function addTubeToScene( word, axis_key, rad_key ) {
+function addTubeToScene( word, axis_key, rad_key, wordFolder ) {
   let geometry = tubeGeometry();
   let line = new THREE.LineLoop( geometry, lineMaterial );
   let tube = { 'axis_key': axis_key, 'word': word, 'line': line, 'rad_key': rad_key };
   tubes.push( tube );
   updateTube( tube );
   scene.add( line );
+  let wordGUI = wordFolder.add(tube, 'word');
+  wordGUI.domElement.style.pointerEvents = "none"
 }
