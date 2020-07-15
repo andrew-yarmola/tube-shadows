@@ -234,7 +234,7 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  replaceTubes( 1 );
+  replaceTubes( 5 );
   
   for (let word of params.yWords) {
     addTubeToScene( word, 'yAxis', 'yMargRad', yWordFolder );
@@ -329,18 +329,23 @@ function updateTube( tube ) {
   sinhOrtho = getSinhOrthoX( wAxis );
   disp = getOrthoDisplacementX( wAxis );
 
-  positions = tube.line.geometry.attributes.position.array;
-  for (let i = 0; i < MAX_POINTS; i++) {
-    // from Tubes in Hyperbolic 3-Manifolds by Przeworski
-    // len_coord/cosh(view_tube_rad) + i girth_coord/sinh(view_tube_rad) =
-    //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
-    z = math.complex( radius, samplingValues[i] );
-    s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
-    positions[3 * i] = (s.im + disp.im) * params.sinhdx;
-    positions[3 * i + 1] = (s.re + disp.re) * params.coshdx;
-    positions[3 * i + 2] = 0;
+  if (math.abs(disp.re) > 2 || math.abs(sinhOrtho) > 4) {
+    tube.line.visible = false;
+  } else {
+    tube.line.visible = true;
+    positions = tube.line.geometry.attributes.position.array;
+    for (let i = 0; i < MAX_POINTS; i++) {
+      // from Tubes in Hyperbolic 3-Manifolds by Przeworski
+      // len_coord/cosh(view_tube_rad) + i girth_coord/sinh(view_tube_rad) =
+      //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
+      z = math.complex( radius, samplingValues[i] );
+      s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
+      positions[3 * i] = (s.im + disp.im) * params.sinhdx;
+      positions[3 * i + 1] = (s.re + disp.re) * params.coshdx;
+      positions[3 * i + 2] = 0;
+    }
+    tube.line.geometry.attributes.position.needsUpdate = true;   
   }
-  tube.line.geometry.attributes.position.needsUpdate = true;   
 }
 
 

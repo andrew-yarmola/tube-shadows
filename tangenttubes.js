@@ -177,17 +177,26 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  replaceTubes( 1 );
- 
+  replaceTubes( 0 );
+  
+  params.words = ["", "f", "ff", "fff",
+                      "F", "FF", "FFF",
+                "ww", "fww", "ffww", "fffww",
+                      "Fww", "FFww", "FFFww",
+                      "wf", "wff", "wfff",
+                      "Wf", "Wff", "Wfff",
+                      "wF", "wFF", "wFFF",
+                      "WF", "WFF", "WFFF"];
+  
   for (let word of params.words) {
     addTubeToScene( word, 'WfwAxis', 'tubeRad' );
   }
 }
 
 function addTubeGUI() {
-  if (params.inputWord.matches("[fFwW]+") &&
+  if (params.inputWord.match("[fFwW]+") &&
      !params.words.includes(params.inputWord)) {
-    addTubeToScene( params.inputWord, 'wfWAxis', 'tubeRad' );
+    addTubeToScene( params.inputWord, 'WfwAxis', 'tubeRad' );
     params.inputWord = "";
     updateScene();
   }
