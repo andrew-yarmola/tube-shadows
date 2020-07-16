@@ -177,19 +177,28 @@ function initTubes() {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  replaceTubes( 0 );
-  
-  params.words = ["", "f", "ff", "fff",
+  replaceTubes( 3 );
+ 
+  params.words = [""];
+    
+  let extra = ["", "f", "ff", "fff",
                       "F", "FF", "FFF",
                 "ww", "fww", "ffww", "fffww",
                       "Fww", "FFww", "FFFww",
                       "wf", "wff", "wfff",
                       "Wf", "Wff", "Wfff",
                       "wF", "wFF", "wFFF",
-                      "WF", "WFF", "WFFF"];
+                      "WF", "WFF", "WFFF",
+                      "wfWFwF", "wfWfwF"]; 
+  extra = ["wf", "wfWFwF", "wfWfwF", "ww", "fww", "Fww"];
   
   for (let word of params.words) {
     addTubeToScene( word, 'WfwAxis', 'tubeRad' );
+  }
+ 
+  for (let word of extra) {
+    params.inputWord = word;
+    addTubeGUI();
   }
 }
 
@@ -253,7 +262,7 @@ function tubeGeometry() {
 }
 
 function updateTube( tube ) {
-  let axis, radius, disp, w, wAxis, sinhOrtho, positions, z, s;
+  let axis, radius, disp, w, wAxis, sinhOrtho, line, positions, z, s;
 
   axis = params[tube.axis_key];
   radius = params[tube.rad_key];
@@ -262,28 +271,36 @@ function updateTube( tube ) {
   sinhOrtho = getSinhOrthoF( wAxis );
   disp = getOrthoDisplacementF( wAxis );
 
-  positions = tube.line.geometry.attributes.position.array;
   for (let i = 0; i < MAX_POINTS; i++) {
     // from Tubes in Hyperbolic 3-Manifolds by Przeworski
     // len_coord/cosh(view_tube_rad) + i girth_coord/sinh(view_tube_rad) =
     //    arcsinh( cosh(other_tube_rad + i t) / sinh(complex_ortho) );
     z = math.complex( radius, samplingValues[i] );
     s = math.asinh( math.divide( math.cosh(z), sinhOrtho) );
-    positions[3 * i] = (s.im + disp.im) * params.sinhRad;
-    positions[3 * i + 1] = (s.re + disp.re) * params.coshRad;
-    positions[3 * i + 2] = 0;
+    for (let j of [-1,0,1]) {
+      line = tube.lines[j+1];
+      positions = line.geometry.attributes.position.array;
+      positions[3 * i] = (s.im + disp.im + math.tau * j) * params.sinhRad;
+      positions[3 * i + 1] = (s.re + disp.re) * params.coshRad;
+      positions[3 * i + 2] = 0;
+      if (i + 1 == MAX_POINTS) {
+        line.geometry.attributes.position.needsUpdate = true;   
+      }
+    }
   }
-  tube.line.geometry.attributes.position.needsUpdate = true;   
 }
 
 
+
 function addTubeToScene( word, axis_key, rad_key ) {
-  let geometry = tubeGeometry();
-  let line = new THREE.LineLoop( geometry, lineMaterial );
-  let tube = { 'axis_key': axis_key, 'word': word, 'line': line, 'rad_key': rad_key };
+  let lines = [];
+  for (let i = 0; i < 3; i++) {
+    lines.push(new THREE.LineLoop( tubeGeometry(), lineMaterial ));
+  }
+  let tube = { 'axis_key': axis_key, 'word': word, 'lines': lines, 'rad_key': rad_key };
   tubes.push( tube );
   updateTube( tube );
-  scene.add( line );
+  lines.forEach( l => scene.add(l) );
   let wordGUI = wordListGUI.add(tube, 'word').name("");
   wordGUI.domElement.style.pointerEvents = "none"
 }
