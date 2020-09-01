@@ -140,7 +140,7 @@ function initGUI() {
     let gui = new dat.GUI();
     gui.add(params, 'fLength', 0.0, 1.0).onChange(updateParamsAndScene).name("re length(g)");
     gui.add(params, 'fAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("im lengt(g)");
-    gui.add(params, 'orthoDist', 0.0, 5.0).onChange(updateParamsAndScene).name("twice tube rad");
+    gui.add(params, 'orthoDist', 0.0, 6.0).onChange(updateParamsAndScene).name("twice tube rad");
     gui.add(params, 'orthoAngle', -math.pi, math.pi).onChange(updateParamsAndScene).name("ortho angle");
     gui.add(params, 'orthoShift', 0.0, 1.0).onChange(updateParamsAndScene).name("ortho shift");
     gui.add(params, 'orthoSpin', -math.pi, math.pi).onChange(updateParamsAndScene).name("ortho spin");

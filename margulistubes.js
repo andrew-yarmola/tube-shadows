@@ -19,10 +19,50 @@ function Params() {
   this.yInputWord = "";
   this.isRendering = false;
   this.needsUpdate = true;
+  this.updateFromBoxcode = false;
+  this.boxcode = "";
+}
+
+let scale_factor = 8.;
+let scale = [ 0,1,2,3,4,5 ].map(function(x) { return scale_factor * math.pow(2., -x/6); });
+
+console.log(scale);
+
+function setParamsFromBoxcode() {
+  let p = params;
+  let pos = 0;
+  let size = [ 1., 1., 1., 1., 1., 1. ];
+  let center = [ 0., 0., 0., 0., 0., 0. ];
+
+  for (let dir of p.boxcode) {
+    let i = pos % 6;
+    size[i] = size[i] * 0.5;
+    center[i] = center[i] + ( 2 * parseFloat(dir) - 1) * size[i];
+    pos += 1;
+    // console.log(dir, pos, i, size, center);
+  }
+
+  console.log(center);
+
+  let coords = center.map(function(c, i) { return scale[i]*c; });
+
+  console.log(coords);
+
+  p.margulis = math.acosh( coords[2] );
+  p.xMargRad = math.asinh( coords[0] );
+  p.yMargRad = math.asinh( coords[1] );
+  p.orthoAngle = math.acos( coords[3] );
+  p.xAngle = 2. * math.asin( coords[4] );
+  p.yAngle = 2. * math.asin( coords[5] );
 }
 
 function updateParams() {
   let p = params;
+
+  if (p.updateFromBoxcode) {
+    setParamsFromBoxcode();
+    p.updateFromBoxcode = false;
+  }
 
   p.orthoDist = p.xMargRad + p.yMargRad;
  
@@ -113,7 +153,7 @@ let container, scene, camera, controls, renderer, xWordFolder, yWordFolder;
 
 // Tube drawing vars
 let tubes = [];
-let lineMaterial;
+let shadowMaterial;
 const MAX_POINTS = 120;
 const ANGLE_INC = math.tau / MAX_POINTS;
 let samplingValues = new Float64Array( MAX_POINTS ) ;
@@ -136,7 +176,18 @@ function updateScene() {
   }
 }
 
+function updateBoxAndScene() {
+  if (params.boxcode.match("[01]+")) {
+    params.updateFromBoxcode = true;
+    params.needsUpdate = true;
+    updateScene();
+  } else {
+    params.boxcode = "";
+  }
+}
+
 function updateParamsAndScene() {
+  params.boxcode = "";
   params.needsUpdate = true;
   updateScene();
 }
@@ -176,6 +227,7 @@ function initScene() {
 
 function initGUI() {
     var gui = new dat.GUI();
+    gui.add(params, 'boxcode').onFinishChange(updateBoxAndScene).name("boxcode").listen();
     gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("margulis");
     gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x marg rad");
     gui.add(params, 'yMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("y marg rad");
@@ -228,7 +280,7 @@ function replaceTubes( maxDepth ) {
 }
 
 function initTubes() {
-  lineMaterial = new THREE.LineBasicMaterial( { color : 0x000000, linewidth: 2 } );
+  shadowMaterial = new THREE.LineBasicMaterial( { color : 0x000000, shadowwidth: 2 } );
 
   for (let i = 1; i < MAX_POINTS; i++) {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
@@ -330,10 +382,10 @@ function updateTube( tube ) {
   disp = getOrthoDisplacementX( wAxis );
 
   if (math.abs(disp.re) > 2 || math.abs(sinhOrtho) > 4) {
-    tube.line.visible = false;
+    tube.shadow.visible = false;
   } else {
-    tube.line.visible = true;
-    positions = tube.line.geometry.attributes.position.array;
+    tube.shadow.visible = true;
+    positions = tube.shadow.geometry.attributes.position.array;
     for (let i = 0; i < MAX_POINTS; i++) {
       // from Tubes in Hyperbolic 3-Manifolds by Przeworski
       // len_coord/cosh(view_tube_rad) + i girth_coord/sinh(view_tube_rad) =
@@ -344,18 +396,18 @@ function updateTube( tube ) {
       positions[3 * i + 1] = (s.re + disp.re) * params.coshdx;
       positions[3 * i + 2] = 0;
     }
-    tube.line.geometry.attributes.position.needsUpdate = true;   
+    tube.shadow.geometry.attributes.position.needsUpdate = true;   
   }
 }
 
 
 function addTubeToScene( word, axis_key, rad_key, wordFolder ) {
   let geometry = tubeGeometry();
-  let line = new THREE.LineLoop( geometry, lineMaterial );
-  let tube = { 'axis_key': axis_key, 'word': word, 'line': line, 'rad_key': rad_key };
+  let shadow = new THREE.LineLoop( geometry, shadowMaterial );
+  let tube = { 'axis_key': axis_key, 'word': word, 'shadow': shadow, 'rad_key': rad_key };
   tubes.push( tube );
   updateTube( tube );
-  scene.add( line );
+  scene.add( shadow );
   let wordGUI = wordFolder.add(tube, 'word');
   wordGUI.domElement.style.pointerEvents = "none"
 }
