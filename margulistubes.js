@@ -149,7 +149,7 @@ function SL2inverse( SL2mat ) {
 }
 
 // Scene vars
-let container, scene, camera, controls, renderer, xWordFolder, yWordFolder;
+let container, scene, camera, controls, renderer, xWordFolder, yWordFolder, gui;
 
 // Tube drawing vars
 let tubes = [];
@@ -181,6 +181,9 @@ function updateBoxAndScene() {
     params.updateFromBoxcode = true;
     params.needsUpdate = true;
     updateScene();
+    for (let controller of gui.__controllers) {
+      controller.updateDisplay();
+    }
   } else {
     params.boxcode = "";
   }
@@ -205,7 +208,7 @@ function initScene() {
   scene = new THREE.Scene();
   scene.background = new THREE.Color( 0xffffff );
 
-  camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 1, 500 );
+  camera = new THREE.PerspectiveCamera( 45, window.innerWidth / window.innerHeight, 0.001, 500 );
   camera.position.set( 0, 0, 5 );
   camera.lookAt( 0, 0, 0 );
   scene.add(camera);
@@ -226,7 +229,7 @@ function initScene() {
 }
 
 function initGUI() {
-    var gui = new dat.GUI();
+    gui = new dat.GUI();
     gui.add(params, 'boxcode').onFinishChange(updateBoxAndScene).name("boxcode").listen();
     gui.add(params, 'margulis', 0.0, 1.0).onChange(updateParamsAndScene).name("margulis");
     gui.add(params, 'xMargRad', 0.0, 5.0).onChange(updateParamsAndScene).name("x marg rad");
@@ -280,13 +283,13 @@ function replaceTubes( maxDepth ) {
 }
 
 function initTubes() {
-  shadowMaterial = new THREE.LineBasicMaterial( { color : 0x000000, shadowwidth: 2 } );
+  shadowMaterial = new THREE.MeshBasicMaterial( { color : 0x000000 } );
 
   for (let i = 1; i < MAX_POINTS; i++) {
     samplingValues[i] = samplingValues[i-1] + ANGLE_INC;
   }
 
-  replaceTubes( 5 );
+  replaceTubes( 2 );
   
   for (let word of params.yWords) {
     addTubeToScene( word, 'yAxis', 'yMargRad', yWordFolder );
